@@ -9,6 +9,12 @@ import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
 
+
+    /*
+     На данный момент приложение падает, тк. мы обращаемся к view не из главного потока.
+     В андроид данное запрещено. Поэтому нужно как-то передать данные из субпотоков в главный.
+    */
+
     private val binding by lazy {
         ActivityMainBinding.inflate(layoutInflater)
     }
