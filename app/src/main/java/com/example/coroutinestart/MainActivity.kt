@@ -8,7 +8,10 @@ import android.os.Looper
 import android.os.Message
 import android.widget.Toast
 import androidx.core.view.isVisible
+import androidx.lifecycle.lifecycleScope
 import com.example.coroutinestart.databinding.ActivityMainBinding
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
@@ -49,35 +52,78 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
         binding.buttonLoad.setOnClickListener {
-            loadData()
+            lifecycleScope.launch {
+                loadData()
+            }
+//            loadDataWithoutCoroutine()
         }
     }
 
-    private fun loadData() {
+    private suspend fun loadData() {
         binding.progress.isVisible = true
         binding.buttonLoad.isEnabled = false
-        loadCity { it ->
-            binding.tvLocation.text = it
-            loadTemperature(it){
-                binding.tvTemperature.text = it.toString()
+        val city = loadCity()
+        binding.tvLocation.text = city
+        val temp = loadTemperature(city)
+        binding.tvTemperature.text = temp.toString()
+        binding.progress.isVisible = false
+        binding.buttonLoad.isEnabled = true
+    }
+
+    private suspend fun loadCity(): String {
+        delay(5000)
+        return "Moscow"
+    }
+
+    private suspend fun loadTemperature(city: String): Int {
+        Toast.makeText(
+            this,
+            "Loading temperature for city: $city",
+            Toast.LENGTH_SHORT
+        ).show()
+        delay(5000)
+        return 17
+    }
+
+
+    //region Тот же самый код, но без Coroutine. Чтобы понять, как это работает под капотом.
+    // По факту под капотом Coroutine все куда сложнее, но примерно так.
+
+    private fun loadDataWithoutCoroutine(step: Int = 0, obj: Any? = null){
+        when (step) {
+            0 -> {
+                binding.progress.isVisible = true
+                binding.buttonLoad.isEnabled = false
+                loadCityWithoutCoroutine {
+                    loadDataWithoutCoroutine(1, it)
+                }
+            }
+            1 -> {
+                val city = obj as String
+                binding.tvLocation.text = city
+                loadTemperatureWithoutCoroutine(city){
+                    loadDataWithoutCoroutine(2, it)
+                }
+            }
+            2 -> {
+                val temp = obj as Int
+                binding.tvTemperature.text = temp.toString()
                 binding.progress.isVisible = false
                 binding.buttonLoad.isEnabled = true
             }
         }
     }
 
-    private fun loadCity(callback: (String) -> Unit) {
-        thread {
-            Thread.sleep(5000)
-            runOnUiThread {
-                callback.invoke("Moscow")
-            }
-        }
+    // Тут специально написано чуть иначе. Вот пример, как работает "delay(5000)"
+    private fun loadCityWithoutCoroutine(callback: (String) -> Unit){
+        Handler(Looper.getMainLooper()).postDelayed({
+            callback.invoke("Moscow")
+        }, 5000)
     }
 
-    private fun loadTemperature(city: String, callback: (Int) -> Unit) {
+    private fun loadTemperatureWithoutCoroutine(city: String, callback: (Int) -> Unit) {
         thread {
-            Handler(Looper.getMainLooper()).post {
+            runOnUiThread{
                 Toast.makeText(
                     this,
                     "Loading temperature for city: $city",
@@ -85,15 +131,10 @@ class MainActivity : AppCompatActivity() {
                 ).show()
             }
             Thread.sleep(5000)
-            //region runOnUiThread - что это?
-            /*
-            Конструкцию "Handler(Looper.getMainLooper()).post" можно упростить аналогичным методом:
-                runOnUiThread (Переводится как: "запусти на главном потоке")
-            */
-            //endregion
-            runOnUiThread {   // Пример для слов выше
+            runOnUiThread{
                 callback.invoke(17)
             }
         }
     }
+    //endregion
 }
